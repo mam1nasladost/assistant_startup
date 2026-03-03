@@ -84,6 +84,10 @@ dependencies {
     // Coil
     implementation(libs.coil.compose)
 
+    //Vosk
+    implementation("net.java.dev.jna:jna:5.13.0@aar")
+    implementation ("com.alphacephei:vosk-android:0.3.75@aar")
+
     // Testing / Debug
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
@@ -92,4 +96,5 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+    implementation(libs.accompanist.permissions)
 }

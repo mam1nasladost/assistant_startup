@@ -18,14 +18,26 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.app.NotificationCompat
+import com.example.assistant_startup.domain.repository.AssistantRepo
 import com.example.assistant_startup.remote.repository_imp.AssistantRepoImp
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 import org.json.JSONObject
+import org.koin.android.ext.android.inject
 import org.vosk.Model
 import org.vosk.Recognizer
 import org.vosk.android.SpeechService
 import org.vosk.android.StorageService
 
-class MyForegroundService(private val repo: AssistantRepoImp) : Service(), org.vosk.android.RecognitionListener {
+class MyForegroundService() : Service(), org.vosk.android.RecognitionListener {
+    private val repo: AssistantRepo by inject()
+
     private val CHANNEL_ID = "ForegroundServiceChannelId"
     private val NOTIFICATION_ID = 1
 
@@ -41,10 +53,48 @@ class MyForegroundService(private val repo: AssistantRepoImp) : Service(), org.v
     private var isVoskReady = false
     private var isProcessingKeyword = false
     private var currentRecognizer: Recognizer? = null
+    private val serviceJob = SupervisorJob()
+    private val serviceScope = CoroutineScope(Dispatchers.IO + serviceJob)
+    private var streamJob: Job? = null
 
     companion object {
         var isRunning by mutableStateOf(false)
             private set
+    }
+
+    private fun startStreamingResponse(prompt: String) {
+        streamJob?.cancel()
+
+        streamJob = serviceScope.launch {
+            val responseBuilder = java.lang.StringBuilder()
+            var lastUpdateTime = System.currentTimeMillis()
+
+            updateNotification("Думаю...", prompt)
+
+            repo.getChatResponse(prompt)
+                .catch { e ->
+                Log.e("VoiceService", "Ошибка API: ${e.message}")
+                updateNotification("Ошибка соединения", prompt)
+                delay(2000)
+            }
+                .collect { chunk ->
+                    responseBuilder.append(chunk)
+                    val currentTime = System.currentTimeMillis()
+
+                    if (currentTime - lastUpdateTime > 250) {
+                        updateNotification(responseBuilder.toString(), prompt)
+                        lastUpdateTime = currentTime
+                    }
+                }
+
+            updateNotification(responseBuilder.toString(), prompt)
+
+            // время для прочтения ответа перед перезапуском
+            delay(3000)
+
+            // перезапускаемся
+            finishSpeechAndRestartVosk()
+        }
     }
 
 
@@ -63,7 +113,7 @@ class MyForegroundService(private val repo: AssistantRepoImp) : Service(), org.v
             .setContentTitle("Голосовой ассистент")
             .setContentText("Запуск и подготовка...")
             .setSmallIcon(ic_btn_speak_now)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .build()
 
         startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
@@ -178,9 +228,10 @@ class MyForegroundService(private val repo: AssistantRepoImp) : Service(), org.v
                 if (!matches.isNullOrEmpty()) {
                     val userCommand = matches[0]
                     Log.d("VoiceService", "Пользователь сказал: $userCommand")
-                    // TODO: Обработать команду пользователя
+                    startStreamingResponse(userCommand)
+                } else {
+                    finishSpeechAndRestartVosk()
                 }
-                finishSpeechAndRestartVosk()
             }
 
             override fun onError(error: Int) {
@@ -229,12 +280,15 @@ class MyForegroundService(private val repo: AssistantRepoImp) : Service(), org.v
         }
     }
 
-    private fun updateNotification(text: String) {
+    private fun updateNotification(text: String, title: String = "Голосовой ассистент") {
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Голосовой ассистент")
+            .setContentTitle(title)
             .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setSmallIcon(ic_btn_speak_now)
             .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOnlyAlertOnce(true)
+            .setOngoing(true)
             .build()
 
         val manager = getSystemService(NotificationManager::class.java)
@@ -277,6 +331,7 @@ class MyForegroundService(private val repo: AssistantRepoImp) : Service(), org.v
         voskModel = null
         currentRecognizer?.close()
         currentRecognizer = null
+        serviceJob.cancel()
 
         mainHandler.post {
             androidSpeechRecognizer?.stopListening()

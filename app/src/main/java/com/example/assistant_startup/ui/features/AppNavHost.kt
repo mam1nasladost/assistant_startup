@@ -14,7 +14,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.assistant_startup.ui.features.chat.ChatScreen
-import com.example.assistant_startup.ui.features.chat.ChatsScreen
+import com.example.assistant_startup.ui.features.chats.ChatsScreen
 import com.example.assistant_startup.ui.features.main.HomeScreen
 import com.example.assistant_startup.ui.features.setting.SettingsScreen
 

@@ -40,8 +40,6 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -52,38 +50,59 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.navigation.NavController
-import com.example.assistant_startup.ui.theme.Assistant_StartupTheme
 import kotlinx.coroutines.launch
-
-data class Trigger(
-    val name: String,
-    val isOn: Boolean
-)
+import androidx.compose.runtime.*
+import com.example.assistant_startup.domain.models.SettingsUiState
+import com.example.assistant_startup.domain.models.Trigger
+import org.koin.androidx.compose.koinViewModel
 
 @Composable
-fun SettingsScreen(navController: NavController) {
-    SettingsContent(onBackClick = { navController.navigate("home") }, onConfirm = {})
+fun SettingsScreen(
+    navController: NavController,
+    viewModel: SettingsViewModel = koinViewModel()
+) {
+    val uiState by viewModel.uiState.collectAsState()
+
+    SettingsContent(
+        uiState = uiState,
+        onBackClick = { navController.navigate("home") },
+        onAutoOffChange = viewModel::updateAutoOff,
+        onPauseLengthChange = viewModel::updatePauseLength,
+        onInputTextChange = viewModel::updateInputText,
+        onAddEndTrigger = viewModel::addEndTrigger,
+        onRemoveEndTrigger = viewModel::removeEndTrigger,
+        onToggleEndTrigger = viewModel::toggleEndTrigger,
+        onAddStartTrigger = viewModel::addStartTrigger,
+        onRemoveStartTrigger = viewModel::removeStartTrigger,
+        onToggleStartTrigger = viewModel::toggleStartTrigger,
+        onApplyChanges = {
+            viewModel.applyChanges()
+        }
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsContent(onBackClick: () -> Unit, onConfirm: () -> Unit) {
-    var isAutoOff by remember { mutableStateOf(true) }
-    var pauseLength by remember { mutableFloatStateOf(5f) }
-    var inputText by remember { mutableStateOf("") }
-    val endTriggers =
-        remember { mutableStateListOf(Trigger("Стоп", true), Trigger("Закончил", false)) }
-    val startTriggers =
-        remember { mutableStateListOf(Trigger("Риски", true), Trigger("Предложения", false)) }
+fun SettingsContent(
+    uiState: SettingsUiState,
+    onBackClick: () -> Unit,
+    onAutoOffChange: (Boolean) -> Unit,
+    onPauseLengthChange: (Float) -> Unit,
+    onInputTextChange: (String) -> Unit,
+    onAddEndTrigger: () -> Unit,
+    onRemoveEndTrigger: (Trigger) -> Unit,
+    onToggleEndTrigger: (Trigger, Boolean) -> Unit,
+    onAddStartTrigger: (String) -> Unit,
+    onRemoveStartTrigger: (Trigger) -> Unit,
+    onToggleStartTrigger: (Trigger, Boolean) -> Unit,
+    onApplyChanges: () -> Unit
+) {
     val sheetState = rememberModalBottomSheetState()
     val scope = rememberCoroutineScope()
     var showSheet by remember { mutableStateOf(false) }
-    val startTriggersOptions = listOf("Риски", "Лимиты", "События", "Цена")
-    var configIsChanged by remember { mutableStateOf(true) }
 
-    Box() {
+    Box {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -124,12 +143,12 @@ fun SettingsContent(onBackClick: () -> Unit, onConfirm: () -> Unit) {
                 ) {
                     Text("Автовыключение", style = MaterialTheme.typography.titleLarge)
                     Spacer(modifier = Modifier.weight(1f))
-                    Switch(isAutoOff, onCheckedChange = { isAutoOff = it; configIsChanged = false })
+                    Switch(uiState.isAutoOff, onCheckedChange = onAutoOffChange)
                 }
 
                 Column {
                     AnimatedVisibility(
-                        visible = isAutoOff,
+                        visible = uiState.isAutoOff,
                         enter = expandVertically(),
                         exit = shrinkVertically()
                     ) {
@@ -140,12 +159,12 @@ fun SettingsContent(onBackClick: () -> Unit, onConfirm: () -> Unit) {
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                "${pauseLength.toInt()} секунд",
+                                "${uiState.pauseLength.toInt()} секунд",
                                 color = MaterialTheme.colorScheme.primary
                             )
                             Slider(
-                                value = pauseLength,
-                                onValueChange = { pauseLength = it; configIsChanged = true },
+                                value = uiState.pauseLength,
+                                onValueChange = onPauseLengthChange,
                                 valueRange = 0f..10f,
                                 steps = 9
                             )
@@ -153,11 +172,10 @@ fun SettingsContent(onBackClick: () -> Unit, onConfirm: () -> Unit) {
                     }
 
                     AnimatedVisibility(
-                        visible = !isAutoOff,
+                        visible = !uiState.isAutoOff,
                         enter = expandVertically(),
                         exit = shrinkVertically()
                     ) {
-
                         Column(
                             modifier = Modifier
                                 .background(Color(0xFFF0F0F0), MaterialTheme.shapes.medium)
@@ -169,8 +187,8 @@ fun SettingsContent(onBackClick: () -> Unit, onConfirm: () -> Unit) {
                                     .padding(16.dp)
                             ) {
                                 OutlinedTextField(
-                                    value = inputText,
-                                    onValueChange = { inputText = it },
+                                    value = uiState.inputText,
+                                    onValueChange = onInputTextChange,
                                     label = { Text("Добавить триггер") },
                                     placeholder = { Text("Введите текст...") },
                                     modifier = Modifier.fillMaxWidth(),
@@ -179,12 +197,9 @@ fun SettingsContent(onBackClick: () -> Unit, onConfirm: () -> Unit) {
                                         Icon(Icons.Default.Add, contentDescription = null)
                                     },
                                     trailingIcon = {
-                                        if (inputText.isNotEmpty()) {
-                                            IconButton(onClick = { inputText = "" }) {
-                                                Icon(
-                                                    Icons.Default.Clear,
-                                                    contentDescription = "Clear"
-                                                )
+                                        if (uiState.inputText.isNotEmpty()) {
+                                            IconButton(onClick = { onInputTextChange("") }) {
+                                                Icon(Icons.Default.Clear, contentDescription = "Clear")
                                             }
                                         }
                                     },
@@ -194,40 +209,23 @@ fun SettingsContent(onBackClick: () -> Unit, onConfirm: () -> Unit) {
                                         capitalization = KeyboardCapitalization.Words
                                     ),
                                     keyboardActions = KeyboardActions(
-                                        onDone = {
-                                            if (inputText.isNotBlank() && !(endTriggers.contains(
-                                                    Trigger(name = inputText, isOn = true)
-                                                ) || endTriggers.contains(
-                                                    Trigger(
-                                                        name = inputText,
-                                                        isOn = false
-                                                    )
-                                                ))
-                                            ) {
-                                                endTriggers.add(Trigger(inputText.trim(), true))
-                                                inputText = ""
-                                                configIsChanged = true
-                                            }
-                                        }
+                                        onDone = { onAddEndTrigger() }
                                     )
                                 )
                             }
-                            endTriggers.forEachIndexed { index, trigger ->
+                            uiState.endTriggers.forEach { trigger ->
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(trigger.name)
                                     Spacer(Modifier.weight(1f))
-                                    IconButton(onClick = { endTriggers.removeAt(index) }) {
+                                    IconButton(onClick = { onRemoveEndTrigger(trigger) }) {
                                         Icon(Icons.Default.Clear, contentDescription = "Clear")
                                     }
                                     Switch(
                                         checked = trigger.isOn,
-                                        onCheckedChange = { checked ->
-                                            endTriggers[index] = trigger.copy(isOn = checked)
-                                            configIsChanged = true
-                                        }
+                                        onCheckedChange = { checked -> onToggleEndTrigger(trigger, checked) }
                                     )
                                 }
                             }
@@ -242,74 +240,45 @@ fun SettingsContent(onBackClick: () -> Unit, onConfirm: () -> Unit) {
                 Text(
                     "Начало записи",
                     style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(bottom = 8.dp)
                 )
-                Box(
-                    modifier = Modifier
-                        .padding(16.dp)
-                ) {
-                    if (showSheet) {
-                        ModalBottomSheet(
-                            onDismissRequest = { showSheet = false },
-                            sheetState = sheetState
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp)
-                            ) {
-                                Text(
-                                    "Выберите тип триггера",
-                                    style = MaterialTheme.typography.titleLarge
-                                )
 
-                                startTriggersOptions.forEach { option ->
-                                    ListItem(
-                                        headlineContent = {
-                                            Row(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .height(45.dp)
-                                                    .background(
-                                                        Color.Black.copy(alpha = 0.05f),
-                                                        MaterialTheme.shapes.medium
-                                                    )
-                                                    .clickable {
-                                                        scope.launch { sheetState.hide() }
-                                                            .invokeOnCompletion {
-                                                                if (!sheetState.isVisible) {
-                                                                    showSheet = false
-                                                                    if (!(startTriggers.contains(
-                                                                            Trigger(
-                                                                                name = option,
-                                                                                isOn = true
-                                                                            )
-                                                                        ) || startTriggers.contains(
-                                                                            Trigger(
-                                                                                name = option,
-                                                                                isOn = false
-                                                                            )
-                                                                        ))
-                                                                    ) {
-                                                                        startTriggers.add(
-                                                                            Trigger(
-                                                                                option.trim(),
-                                                                                true
-                                                                            )
-                                                                        )
-                                                                        configIsChanged = true
-                                                                    }
-                                                                }
-                                                            }
+                if (showSheet) {
+                    ModalBottomSheet(
+                        onDismissRequest = { showSheet = false },
+                        sheetState = sheetState
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 16.dp, end = 16.dp, bottom = 42.dp)
+                        ) {
+                            Text("Выберите тип триггера", style = MaterialTheme.typography.titleLarge)
+
+                            uiState.startTriggersOptions.forEach { option ->
+                                ListItem(
+                                    headlineContent = {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(45.dp)
+                                                .background(Color.Black.copy(alpha = 0.05f), MaterialTheme.shapes.medium)
+                                                .clickable {
+                                                    scope.launch { sheetState.hide() }.invokeOnCompletion {
+                                                        if (!sheetState.isVisible) {
+                                                            showSheet = false
+                                                            onAddStartTrigger(option)
+                                                        }
                                                     }
-                                                    .padding(horizontal = 16.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Text(option)
-                                            }
+                                                }
+                                                .padding(horizontal = 16.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(option)
                                         }
-                                    )
-                                }
+                                    }
+                                )
                             }
                         }
                     }
@@ -317,10 +286,7 @@ fun SettingsContent(onBackClick: () -> Unit, onConfirm: () -> Unit) {
 
                 Column(
                     modifier = Modifier
-                        .background(
-                            Color(0xFFF0F0F0),
-                            MaterialTheme.shapes.medium
-                        )
+                        .background(Color(0xFFF0F0F0), MaterialTheme.shapes.medium)
                         .padding(16.dp)
                 ) {
                     Row(
@@ -336,7 +302,7 @@ fun SettingsContent(onBackClick: () -> Unit, onConfirm: () -> Unit) {
                             Text("Добавить")
                         }
                     }
-                    startTriggers.forEachIndexed { index, trigger ->
+                    uiState.startTriggers.forEach { trigger ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -345,15 +311,12 @@ fun SettingsContent(onBackClick: () -> Unit, onConfirm: () -> Unit) {
                         ) {
                             Text(trigger.name, style = MaterialTheme.typography.bodyLarge)
                             Spacer(Modifier.weight(1f))
-                            IconButton(onClick = { startTriggers.removeAt(index) }) {
+                            IconButton(onClick = { onRemoveStartTrigger(trigger) }) {
                                 Icon(Icons.Default.Clear, contentDescription = "Clear")
                             }
                             Switch(
                                 checked = trigger.isOn,
-                                onCheckedChange = { checked ->
-                                    startTriggers[index] = trigger.copy(isOn = checked)
-                                    configIsChanged = true
-                                }
+                                onCheckedChange = { checked -> onToggleStartTrigger(trigger, checked) }
                             )
                         }
                     }
@@ -362,7 +325,8 @@ fun SettingsContent(onBackClick: () -> Unit, onConfirm: () -> Unit) {
         }
 
         Button(
-            onClick = { onConfirm(); configIsChanged = false },
+            onClick = onApplyChanges,
+            enabled = uiState.configIsChanged,
             modifier = Modifier
                 .padding(16.dp)
                 .align(Alignment.BottomCenter)
@@ -371,14 +335,5 @@ fun SettingsContent(onBackClick: () -> Unit, onConfirm: () -> Unit) {
         ) {
             Text(text = "Применить изменения")
         }
-    }
-}
-
-
-@Preview(showBackground = true, showSystemUi = true)
-@Composable
-fun SettingsPreview() {
-    Assistant_StartupTheme {
-        SettingsContent(onBackClick = {}, onConfirm = {})
     }
 }

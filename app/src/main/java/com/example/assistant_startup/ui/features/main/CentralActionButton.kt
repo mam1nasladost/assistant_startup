@@ -25,7 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Star
 
 @Composable
-fun CentralActionButton() {
+fun CentralActionButton(text: String, onClick: () -> Unit) {
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
@@ -41,7 +41,7 @@ fun CentralActionButton() {
                         )
                     )
                 )
-                .clickable {},
+                .clickable { onClick() },
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -55,7 +55,7 @@ fun CentralActionButton() {
         Spacer(modifier = Modifier.height(24.dp))
 
         Text(
-            text = "нажми чтобы начать мыслить...",
+            text = text,
             style = TextStyle(
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Medium,

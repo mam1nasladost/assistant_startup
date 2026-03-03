@@ -7,6 +7,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.assistant_startup.ui.features.AppNavHost
 import com.example.assistant_startup.ui.theme.Assistant_StartupTheme
+import org.koin.android.ext.koin.androidContext
+import org.koin.core.context.GlobalContext.startKoin
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -15,6 +17,10 @@ class MainActivity : ComponentActivity() {
             Assistant_StartupTheme(){
                 AppNavHost()
             }
+        }
+        startKoin {
+            androidContext(this@MainActivity)
+            modules(appModules())
         }
     }
 }
