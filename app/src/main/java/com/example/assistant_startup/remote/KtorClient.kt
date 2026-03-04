@@ -80,7 +80,7 @@ class KtorClient() {
     fun streamDeepSeek(prompt: String): Flow<String> = flow {
         client.preparePost("https://api.deepseek.com/chat/completions") {
             contentType(ContentType.Application.Json)
-            header("Authorization", "Bearer sk-0559425a16b147f498bcbd4079fb911c")
+            header("Authorization", "Bearer $TOKEN")
             setBody(
                 DeepSeekRequest(
                     model = "deepseek-chat",
